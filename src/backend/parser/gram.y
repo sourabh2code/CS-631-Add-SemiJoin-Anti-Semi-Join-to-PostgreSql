@@ -718,7 +718,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 
 /* ordinary key words in alphabetical order */
 %token <keyword> ABORT_P ABSENT ABSOLUTE_P ACCESS ACTION ADD_P ADMIN AFTER
-	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS ASC
+	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANTI ANY ARRAY AS ASC
 	ASENSITIVE ASSERTION ASSIGNMENT ASYMMETRIC ATOMIC AT ATTACH ATTRIBUTE AUTHORIZATION
 
 	BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
@@ -787,7 +787,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	RESET RESPECT_P RESTART RESTRICT RETURN RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK ROLLUP
 	ROUTINE ROUTINES ROW ROWS RULE
 
-	SAVEPOINT SCALAR SCHEMA SCHEMAS SCROLL SEARCH SECOND_P SECURITY SELECT
+	SAVEPOINT SCALAR SCHEMA SCHEMAS SCROLL SEARCH SEMI SECOND_P SECURITY SELECT
 	SEQUENCE SEQUENCES
 	SERIALIZABLE SERVER SESSION SESSION_USER SET SETS SETOF SHARE SHOW
 	SIMILAR SIMPLE SKIP SMALLINT SNAPSHOT SOME SOURCE SQL_P STABLE STANDALONE_P
@@ -920,7 +920,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
  * They wouldn't be given a precedence at all, were it not that we need
  * left-associativity among the JOIN rules themselves.
  */
-%left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL
+%left		JOIN CROSS LEFT FULL RIGHT INNER_P NATURAL SEMI ANTI
 
 %%
 
@@ -14170,6 +14170,12 @@ join_type:	FULL opt_outer							{ $$ = JOIN_FULL; }
 			| LEFT opt_outer						{ $$ = JOIN_LEFT; }
 			| RIGHT opt_outer						{ $$ = JOIN_RIGHT; }
 			| INNER_P								{ $$ = JOIN_INNER; }
+			| SEMI									{ $$ = JOIN_SEMI; }
+			| ANTI									{ $$ = JOIN_ANTI; }
+			| LEFT SEMI								{ $$ = JOIN_SEMI; }
+			| LEFT ANTI								{ $$ = JOIN_ANTI; }
+			| RIGHT SEMI							{ $$ = JOIN_RIGHT_SEMI; }
+			| RIGHT ANTI							{ $$ = JOIN_RIGHT_ANTI; }
 		;
 
 /* OUTER is just noise... */
@@ -18494,7 +18500,8 @@ col_name_keyword:
  * - thomas 2000-11-28
  */
 type_func_name_keyword:
-			  AUTHORIZATION
+			  ANTI
+			| AUTHORIZATION
 			| BINARY
 			| COLLATION
 			| CONCURRENTLY
@@ -18514,6 +18521,7 @@ type_func_name_keyword:
 			| OUTER_P
 			| OVERLAPS
 			| RIGHT
+			| SEMI
 			| SIMILAR
 			| TABLESAMPLE
 			| VERBOSE
@@ -18632,6 +18640,7 @@ bare_label_keyword:
 			| ANALYSE
 			| ANALYZE
 			| AND
+			| ANTI
 			| ANY
 			| ASC
 			| ASENSITIVE
@@ -18965,6 +18974,7 @@ bare_label_keyword:
 			| SEARCH
 			| SECURITY
 			| SELECT
+			| SEMI
 			| SEQUENCE
 			| SEQUENCES
 			| SERIALIZABLE
