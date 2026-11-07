@@ -1430,6 +1430,11 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 
 		switch (j->jointype)
 		{
+			case JOIN_SEMI:
+			case JOIN_ANTI:
+			case JOIN_RIGHT_SEMI:
+			case JOIN_RIGHT_ANTI:
+				break;
 			case JOIN_INNER:
 				break;
 			case JOIN_LEFT:
@@ -1513,6 +1518,18 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 		}
 
 		/* Add remaining columns from each side to the output columns */
+		if (j->jointype != JOIN_RIGHT_SEMI && j->jointype != JOIN_RIGHT_ANTI)
+			res_colindex +=
+				extractRemainingColumns(pstate,
+										l_nscolumns, l_colnames, &l_colnos,
+										&res_colnames, &res_colvars,
+										res_nscolumns + res_colindex);
+		if (j->jointype != JOIN_SEMI && j->jointype != JOIN_ANTI)
+			res_colindex +=
+				extractRemainingColumns(pstate,
+										r_nscolumns, r_colnames, &r_colnos,
+										&res_colnames, &res_colvars,
+										res_nscolumns + res_colindex);
 		res_colindex +=
 			extractRemainingColumns(pstate,
 									l_nscolumns, l_colnames, &l_colnos,
@@ -1606,7 +1623,31 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 		if (j->alias != NULL)
 			my_namespace = NIL;
 		else
+		{
 			setNamespaceColumnVisibility(my_namespace, false);
+			if (j->jointype == JOIN_SEMI || j->jointype == JOIN_ANTI)
+			{
+				ListCell   *lc;
+
+				foreach(lc, r_namespace)
+				{
+					ParseNamespaceItem *r_nsi = (ParseNamespaceItem *) lfirst(lc);
+
+					r_nsi->p_rel_visible = false;
+				}
+			}
+			else if (j->jointype == JOIN_RIGHT_SEMI || j->jointype == JOIN_RIGHT_ANTI)
+			{
+				ListCell   *lc;
+
+				foreach(lc, l_namespace)
+				{
+					ParseNamespaceItem *l_nsi = (ParseNamespaceItem *) lfirst(lc);
+
+					l_nsi->p_rel_visible = false;
+				}
+			}
+		}
 
 		/*
 		 * The join RTE itself is always made visible for unqualified column
@@ -1729,10 +1770,14 @@ buildMergedJoinVar(ParseState *pstate, JoinType jointype,
 				res_node = l_node;
 			break;
 		case JOIN_LEFT:
+		case JOIN_SEMI:
+		case JOIN_ANTI:
 			/* Always use left var */
 			res_node = l_node;
 			break;
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_SEMI:
+		case JOIN_RIGHT_ANTI:
 			/* Always use right var */
 			res_node = r_node;
 			break;
