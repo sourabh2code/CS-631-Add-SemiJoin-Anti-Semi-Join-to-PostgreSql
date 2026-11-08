@@ -827,6 +827,10 @@ pull_up_sublinks_jointree_recurse(PlannerInfo *root, Node *jtnode,
 														 NULL, NULL);
 				break;
 			case JOIN_FULL:
+			case JOIN_SEMI:
+			case JOIN_ANTI:
+			case JOIN_RIGHT_SEMI:
+			case JOIN_RIGHT_ANTI:
 				/* can't do anything with full-join quals */
 				break;
 			case JOIN_RIGHT:
@@ -1399,6 +1403,8 @@ pull_up_subqueries_recurse(PlannerInfo *root, Node *jtnode,
 													 NULL);
 				break;
 			case JOIN_RIGHT:
+			case JOIN_RIGHT_SEMI:
+			case JOIN_RIGHT_ANTI:
 				j->larg = pull_up_subqueries_recurse(root, j->larg,
 													 j,
 													 NULL);
@@ -3530,6 +3536,7 @@ reduce_outer_joins_pass1(Node *jtnode)
 		{
 			case JOIN_INNER:
 			case JOIN_SEMI:
+			case JOIN_RIGHT_SEMI:
 				/* No new nullability; propagate state from children */
 				result->contains_outer = left_state->contains_outer ||
 					right_state->contains_outer;
@@ -3544,6 +3551,7 @@ reduce_outer_joins_pass1(Node *jtnode)
 												  right_state->relids);
 				break;
 			case JOIN_RIGHT:
+			case JOIN_RIGHT_ANTI:
 				/* LHS is nullable; RHS keeps existing status */
 				result->contains_outer = true;
 				result->nullable_rels = bms_union(left_state->relids,
@@ -3714,6 +3722,8 @@ reduce_outer_joins_pass2(Node *jtnode,
 				break;
 			case JOIN_SEMI:
 			case JOIN_ANTI:
+			case JOIN_RIGHT_SEMI:
+			case JOIN_RIGHT_ANTI:
 
 				/*
 				 * These could only have been introduced by pull_up_sublinks,
@@ -3729,7 +3739,7 @@ reduce_outer_joins_pass2(Node *jtnode,
 					 (int) jointype);
 				break;
 		}
-
+			
 		/*
 		 * Convert JOIN_RIGHT to JOIN_LEFT, and likewise the JOIN_RIGHT_ANTI
 		 * that the JOIN_FULL arm may have produced just above to JOIN_ANTI,
@@ -3739,14 +3749,20 @@ reduce_outer_joins_pass2(Node *jtnode,
 		 * merged join variables.  We don't care about that at present, but be
 		 * wary of it ...
 		 */
-		if (jointype == JOIN_RIGHT || jointype == JOIN_RIGHT_ANTI)
+		if (jointype == JOIN_RIGHT || jointype == JOIN_RIGHT_ANTI ||
+			jointype == JOIN_RIGHT_SEMI)
 		{
 			Node	   *tmparg;
 
 			tmparg = j->larg;
 			j->larg = j->rarg;
 			j->rarg = tmparg;
-			jointype = (jointype == JOIN_RIGHT) ? JOIN_LEFT : JOIN_ANTI;
+			if (jointype == JOIN_RIGHT)
+				jointype = JOIN_LEFT;
+			else if (jointype == JOIN_RIGHT_ANTI)
+				jointype = JOIN_ANTI;
+			else
+				jointype = JOIN_SEMI;
 			right_state = linitial(state1->sub_states);
 			left_state = lsecond(state1->sub_states);
 		}
@@ -5110,6 +5126,8 @@ get_nullingrels_recurse(Node *jtnode, Relids upper_nullingrels,
 				get_nullingrels_recurse(j->rarg, local_nullingrels, info);
 				break;
 			case JOIN_RIGHT:
+			case JOIN_RIGHT_SEMI:
+			case JOIN_RIGHT_ANTI:
 				local_nullingrels = bms_add_member(bms_copy(upper_nullingrels),
 												   j->rtindex);
 				get_nullingrels_recurse(j->larg, local_nullingrels, info);

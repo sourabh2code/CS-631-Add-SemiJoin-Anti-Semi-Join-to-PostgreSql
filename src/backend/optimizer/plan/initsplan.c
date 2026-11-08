@@ -1689,7 +1689,8 @@ deconstruct_recurse(PlannerInfo *root, Node *jtnode,
 				jtitem->qualscope = bms_union(left_item->qualscope,
 											  right_item->qualscope);
 				/* SEMI join never has rtindex, so don't add to anything */
-				Assert(j->rtindex == 0);
+				/* Parser-created SEMI JOIN has a non-zero rtindex */
+				/* Assert(j->rtindex == 0); */
 				jtitem->inner_join_rels = bms_union(left_item->inner_join_rels,
 													right_item->inner_join_rels);
 				jtitem->left_rels = left_item->qualscope;
@@ -1881,7 +1882,7 @@ deconstruct_distribute(PlannerInfo *root, JoinTreeItem *jtitem)
 										jtitem->right_rels,
 										jtitem->inner_join_rels,
 										j->jointype,
-										j->rtindex,
+										(j->jointype == JOIN_SEMI) ? 0 : j->rtindex,
 										my_quals);
 			jtitem->sjinfo = sjinfo;
 			if (j->jointype == JOIN_SEMI)
