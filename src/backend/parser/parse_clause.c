@@ -1217,7 +1217,7 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 		/*
 		 * Generate combined namespace info for possible use below.
 		 */
-		my_namespace = list_concat(l_namespace, r_namespace);
+		my_namespace = list_concat(list_copy(l_namespace), r_namespace);
 
 		/*
 		 * We'll work from the nscolumns data and eref alias column names for
@@ -1530,17 +1530,7 @@ transformFromClauseItem(ParseState *pstate, Node *n,
 										r_nscolumns, r_colnames, &r_colnos,
 										&res_colnames, &res_colvars,
 										res_nscolumns + res_colindex);
-		res_colindex +=
-			extractRemainingColumns(pstate,
-									l_nscolumns, l_colnames, &l_colnos,
-									&res_colnames, &res_colvars,
-									res_nscolumns + res_colindex);
-		res_colindex +=
-			extractRemainingColumns(pstate,
-									r_nscolumns, r_colnames, &r_colnos,
-									&res_colnames, &res_colvars,
-									res_nscolumns + res_colindex);
-
+		
 		/* If join has an alias, it syntactically hides all inputs */
 		if (j->alias)
 		{

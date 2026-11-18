@@ -3536,10 +3536,14 @@ reduce_outer_joins_pass1(Node *jtnode)
 		{
 			case JOIN_INNER:
 			case JOIN_SEMI:
-			case JOIN_RIGHT_SEMI:
 				/* No new nullability; propagate state from children */
 				result->contains_outer = left_state->contains_outer ||
 					right_state->contains_outer;
+				result->nullable_rels = bms_union(left_state->nullable_rels,
+												  right_state->nullable_rels);
+			case JOIN_RIGHT_SEMI:
+				/* Force pass 2 to run so JOIN_RIGHT_SEMI is flipped to JOIN_SEMI */
+				result->contains_outer = true;
 				result->nullable_rels = bms_union(left_state->nullable_rels,
 												  right_state->nullable_rels);
 				break;

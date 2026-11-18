@@ -932,7 +932,8 @@ subquery_planner(PlannerGlobal *glob, Query *parse, char *plan_name,
 		{
 			case RTE_JOIN:
 				root->hasJoinRTEs = true;
-				if (IS_OUTER_JOIN(rte->jointype))
+				if (IS_OUTER_JOIN(rte->jointype) ||
+					rte->jointype == JOIN_RIGHT_SEMI)
 					hasOuterJoins = true;
 				break;
 			case RTE_RESULT:
