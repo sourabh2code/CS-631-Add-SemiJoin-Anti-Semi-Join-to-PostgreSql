@@ -1,0 +1,165 @@
+DROP TABLE IF EXISTS assignments, projects, employees, departments;
+
+CREATE TABLE departments (
+  dept_id   int PRIMARY KEY,
+  dept_name text NOT NULL,
+  budget    int
+);
+
+CREATE TABLE employees (
+  emp_id     int PRIMARY KEY,
+  emp_name   text NOT NULL,
+  dept_id    int,
+  manager_id int,
+  salary     int
+);
+
+CREATE TABLE projects (
+  proj_id   int PRIMARY KEY,
+  proj_name text NOT NULL,
+  dept_id   int,
+  is_active boolean
+);
+
+CREATE TABLE assignments (
+  emp_id  int,
+  proj_id int,
+  hours   int
+);
+
+INSERT INTO departments VALUES
+  (10, 'Engineering', 300000),
+  (20, 'Sales',       150000),
+  (30, 'Research',    250000),
+  (40, 'Legal',       100000);  -- no employees, no projects
+
+INSERT INTO employees VALUES
+  (1, 'Alice', 10, NULL, 95000),
+  (2, 'Bob',   10, 1,    80000),
+  (3, 'Carol', 10, 1,    70000),
+  (4, 'Dave',  20, NULL, 65000),
+  (5, 'Eve',   20, 4,    55000),
+  (6, 'Frank', 30, NULL, 90000),
+  (7, 'Grace', NULL, 1,  60000); -- NULL dept_id, no assignments
+
+INSERT INTO projects VALUES
+  (101, 'Query Engine', 10, true),
+  (102, 'Cloud Sync',   10, false),
+  (103, 'CRM Upgrade',  20, true),
+  (104, 'AI Lab',       30, true),
+  (105, 'Compliance',   40, false); -- no assignments
+
+INSERT INTO assignments VALUES
+  (1, 101, 25),
+  (1, 102, 15), -- Alice has 2 assignments (tests deduplication)
+  (2, 101, 30),
+  (3, 101, 10),
+  (4, 103, 20),
+  (6, 104, 40),
+  (NULL, 101, 5); -- NULL emp_id (tests NULL handling)
+
+
+
+
+-- 1. Basic SEMI JOIN: Employees assigned to at least one project (no duplicates)
+
+SELECT * FROM employees e
+SEMI JOIN assignments a ON e.emp_id = a.emp_id
+ORDER BY e.emp_id;
+
+-- 2. Basic ANTI JOIN: Employees with no project assignments
+
+SELECT * FROM employees e
+ANTI JOIN assignments a ON e.emp_id = a.emp_id
+ORDER BY e.emp_id;
+
+-- 3. Basic RIGHT SEMI JOIN: Projects that have at least one assignment
+
+SELECT * FROM assignments a
+RIGHT SEMI JOIN projects p ON a.proj_id = p.proj_id
+ORDER BY p.proj_id;
+
+-- 4. Basic RIGHT ANTI JOIN: Departments that have zero employees
+
+SELECT * FROM employees e
+RIGHT ANTI JOIN departments d ON e.dept_id = d.dept_id
+ORDER BY d.dept_id;
+
+-- 5. LEFT SEMI JOIN with USING: Employees belonging to a valid department
+
+SELECT * FROM employees
+LEFT SEMI JOIN departments USING (dept_id)
+ORDER BY emp_id;
+
+-- 6. Multi-condition SEMI JOIN: Employees working >= 20 hours on any project
+
+SELECT e.emp_id, e.emp_name, e.salary
+FROM employees e
+SEMI JOIN assignments a ON e.emp_id = a.emp_id AND a.hours >= 20
+ORDER BY e.emp_id;
+
+-- 7. Self ANTI JOIN: Highest-paid employee(s) in each department
+
+SELECT e1.emp_id, e1.emp_name, e1.dept_id, e1.salary
+FROM employees e1
+ANTI JOIN employees e2
+  ON e1.dept_id = e2.dept_id AND e1.salary < e2.salary
+ORDER BY e1.emp_id;
+
+-- 8. Chained SEMI + ANTI JOIN: Assigned employees who are NOT managers
+
+SELECT e.emp_id, e.emp_name
+FROM employees e
+SEMI JOIN assignments a ON e.emp_id = a.emp_id
+ANTI JOIN employees m ON e.emp_id = m.manager_id
+ORDER BY e.emp_id;
+
+-- 9. Nested parenthesized joins: Active projects in high-budget departments (>= 200k) that have assignments
+
+SELECT * FROM (
+  assignments a RIGHT SEMI JOIN projects p ON a.proj_id = p.proj_id
+)
+SEMI JOIN departments d ON p.dept_id = d.dept_id AND d.budget >= 200000
+WHERE p.is_active = true
+ORDER BY p.proj_id;
+
+-- 10. Aggregation + HAVING after SEMI JOIN: Departments with >= 2 assigned employees
+
+SELECT e.dept_id, COUNT(*) AS assigned_emps, SUM(e.salary) AS total_salary
+FROM employees e
+SEMI JOIN assignments a ON e.emp_id = a.emp_id
+GROUP BY e.dept_id
+HAVING COUNT(*) >= 2
+ORDER BY e.dept_id;
+
+-- 11. SEMI JOIN + correlated NOT EXISTS: Assigned employees whose department has NO inactive projects
+
+SELECT e.emp_id, e.emp_name, e.dept_id
+FROM employees e
+SEMI JOIN assignments a ON e.emp_id = a.emp_id
+WHERE NOT EXISTS (
+  SELECT 1 FROM projects p
+  WHERE p.dept_id = e.dept_id AND p.is_active = false
+)
+ORDER BY e.emp_id;
+
+-- 12. ANTI JOIN + correlated scalar subquery: Unassigned employees earning above their department's average
+
+SELECT e.emp_id, e.emp_name, e.dept_id, e.salary
+FROM employees e
+ANTI JOIN assignments a ON e.emp_id = a.emp_id
+WHERE e.salary > (
+  SELECT AVG(e2.salary) FROM employees e2 WHERE e2.dept_id = e.dept_id
+)
+ORDER BY e.emp_id;
+
+-- 13. RIGHT ANTI JOIN + correlated EXISTS: Departments with no active projects that still have >= 1 employee earning > 60k
+
+SELECT d.dept_id, d.dept_name
+FROM (SELECT * FROM projects WHERE is_active = true) ap
+RIGHT ANTI JOIN departments d ON ap.dept_id = d.dept_id
+WHERE EXISTS (
+  SELECT 1 FROM employees e
+  WHERE e.dept_id = d.dept_id AND e.salary > 60000
+)
+ORDER BY d.dept_id;
